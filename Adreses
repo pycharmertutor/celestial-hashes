@@ -1,0 +1,66 @@
+using System;
+using System.Runtime.ExceptionServices;
+
+static class Program
+{
+    static void Main()
+    {
+        SetSETranslator((u, _) =>
+        {
+            string error = "SE Exception: ";
+            string result = $"0x{u:X8}";
+            error += result;
+            throw new Exception(error);
+        });
+
+        byte top_offset = 0;
+        byte base_offset = 0;
+        IntPtr lua_state = IntPtr.Zero; // Assuming lua_state is defined elsewhere
+
+        for (int i = 0; i < 6; i++)
+        {
+            IntPtr address_1 = new IntPtr(lua_state.ToInt64() + (8 + i * 4));
+            for (int j = 0; j < 6; j++)
+            {
+                IntPtr address_2 = new IntPtr(lua_state.ToInt64() + (8 + j * 4));
+                if (address_1 == address_2 && i != j)
+                {
+                    execution.luau_load(lua_state, "return '0'");
+                    try
+                    {
+                        IntPtr result_1 = Marshal.ReadIntPtr(address_1);
+                        IntPtr result_2 = Marshal.ReadIntPtr(address_2);
+                    }
+                    catch (Exception)
+                    {
+                        // do shit here uwu 
+                    }
+                    if (address_1 - 16 == address_2)
+                    {
+                        top_offset = (byte)i;
+                        base_offset = (byte)j;
+                        Marshal.WriteIntPtr(new IntPtr(lua_state.ToInt64() + (8 + i * 4)), address_1 - 16);
+                        break;
+                    }
+                    if (address_2 - 16 == address_1)
+                    {
+                        top_offset = (byte)j;
+                        base_offset = (byte)i;
+                        Marshal.WriteIntPtr(new IntPtr(lua_state.ToInt64() + (8 + j * 4)), address_2 - 16);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    static void SetSETranslator(Action<uint, IntPtr> translator)
+    {
+        GCHandle handle = GCHandle.Alloc(translator);
+        IntPtr functionPointer = Marshal.GetFunctionPointerForDelegate(translator);
+        SetUnhandledExceptionFilter(functionPointer);
+    }
+
+    [DllImport("kernel32.dll")]
+    static extern IntPtr SetUnhandledExceptionFilter(IntPtr lpTopLevelExceptionFilter);
+}
